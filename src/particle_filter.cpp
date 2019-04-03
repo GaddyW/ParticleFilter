@@ -110,7 +110,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    */
   Particle part;	
   for (int i = 0; i < num_particles; ++i) {
-    part = particle[i];
+    part = particles[i];
     part.associations = [];
     part.sense_x = [];
     part.sense_y = [];
@@ -147,7 +147,16 @@ void ParticleFilter::resample() {
    * NOTE: You may find std::discrete_distribution helpful here.
    *   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
    */
-
+  std::vector<double> particle_weights[num_particles];
+  std::vector<Particle> particles_resamp;
+  
+  for (int j = 0; j < num_particles; ++j) {
+    particle_weights[j] = particles[j].weight
+    }
+  std::discrete_distribution<> d(particle_weights);
+  for(int n=0; n<num_particles; ++n) {
+        particles_resamp[n] = particles(d(gen));
+    }
 }
 
 void ParticleFilter::SetAssociations(Particle& particle, 
