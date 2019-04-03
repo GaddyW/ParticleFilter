@@ -20,6 +20,7 @@
 
 using std::string;
 using std::vector;
+using std::normal_distribution;
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
   /**
@@ -30,7 +31,26 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
    * NOTE: Consult particle_filter.h for more information about this method 
    *   (and others in this file).
    */
-  num_particles = 0;  // TODO: Set the number of particles
+  // Set the number of particles
+  num_particles = 100;  
+  
+  // Create normal distributions for x, y, and theta
+  normal_distribution<double> dist_x(gps_x, std[0]);
+  normal_distribution<double> dist_y(gps_y, std[1]);
+  normal_distribution<double> dist_theta(theta, std[2]);
+  
+  // Sample from these normal distributions like this: 
+  for (int i = 0; i < num_particles; ++i) {
+    Particle samp;
+    samp.id = i;
+    samp.x = dist_x(gen);
+    samp.y = dist_y(gen);
+    samp.theta = dist_theta(gen);
+    samp.weight = 1;
+    
+    particles.append(samp);
+  }
+  is_initialized = true;
 
 }
 
@@ -44,6 +64,19 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
    *  http://www.cplusplus.com/reference/random/default_random_engine/
    */
 
+  for (int i = 0; i < num_particles; ++i) {
+    double x_pred = particle[i].x + velocity/yaw_rate * (sin(particle[i].theta + yaw_rate*delta_t) - sin(particle[i].theta));
+    double y_pred = particle[i].y + velocity/yaw_rate * (cos(particle[i].theta) - cos(particle[i].theta + yaw_rate*delta_t));
+    double theta_pred = particle[i].theta + yaw_rate*delta_t;
+    
+    normal_distribution<double> dist_x(x_pred, std[0]);
+  	normal_distribution<double> dist_y(y_pred, std[1]);
+  	normal_distribution<double> dist_theta(theta_pred, std[2]);
+    
+    particles[i].x = dist_x(gen);
+    particles[i].y = dist_y(gen)
+    particles[i].theta = dist_theta(gen);
+  }  
 }
 
 void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted, 
@@ -56,7 +89,7 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
    *   probably find it useful to implement this method and use it as a helper 
    *   during the updateWeights phase.
    */
-
+	
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
@@ -75,7 +108,36 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    *   and the following is a good resource for the actual equation to implement
    *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
    */
+  Particle part;	
+  for (int i = 0; i < num_particles; ++i) {
+    part = particle[i];
+    part.associations = [];
+    part.sense_x = [];
+    part.sense_y = [];
+    
+    for (int j = 0; j < observations.size(); ++j) {
+      x_map = part.x + (cos(part.theta) * observations[j].x) - (sin(part.theta) * observations[j].y);
+      y_map = part.y + (sin(part.theta) * observations[j].x) + (cos(part.theta) * observations[j].y);
+      double min_dist = sensor_range;
+      double min_x;
+      double min_y;
 
+      for (int k = 0; k < Map.size(); ++k) {
+        double distance = dist(map_landmarks[k].x_f, x_map, map_landmarks[k].y_f, y_map);
+        if (distance < min_dist) {
+          association = map_landmarks[k].id_i;
+          min_dist = distance;
+          min_x = map_landmarks[k].x_f;
+          min_y = map_landmarks[k].y_f;
+        }
+      }
+      
+      part.associations.append(association);
+      part.sense_x.append(x_map);
+      part.sense_y.append(y_map);
+      part.weight *= exp(- ((min_x - x_map) ** 2) / (std_landmark[0] ** 2) / 2.0  - ((min_y - y_map) ** 2) / (std_landmark[1] ** 2) / 2.0) / sqrt(2.0 * M_PI * std_landmark[1] * std_landmark[2]);//calculate proability of association as well
+    }
+  }
 }
 
 void ParticleFilter::resample() {
