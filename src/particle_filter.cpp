@@ -157,6 +157,7 @@ void ParticleFilter::resample() {
   for(int n=0; n<num_particles; ++n) {
         particles_resamp[n] = particles(d(gen));
     }
+  particles = particles_resamp;
 }
 
 void ParticleFilter::SetAssociations(Particle& particle, 
