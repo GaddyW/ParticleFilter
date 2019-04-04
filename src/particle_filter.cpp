@@ -18,6 +18,7 @@
 
 #include "helper_functions.h"
 
+
 using std::string;
 using std::vector;
 using std::normal_distribution;
@@ -33,10 +34,10 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
    */
   // Set the number of particles
   num_particles = 100;  
-  
+  std::default_random_engine gen;
   // Create normal distributions for x, y, and theta
-  normal_distribution<double> dist_x(gps_x, std[0]);
-  normal_distribution<double> dist_y(gps_y, std[1]);
+  normal_distribution<double> dist_x(x, std[0]);
+  normal_distribution<double> dist_y(y, std[1]);
   normal_distribution<double> dist_theta(theta, std[2]);
   
   // Sample from these normal distributions like this: 
@@ -48,7 +49,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
     samp.theta = dist_theta(gen);
     samp.weight = 1;
     
-    particles.append(samp);
+    particles.push_back(samp);
   }
   is_initialized = true;
 
@@ -63,18 +64,18 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
    *  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
    *  http://www.cplusplus.com/reference/random/default_random_engine/
    */
-
+  std::default_random_engine gen;
   for (int i = 0; i < num_particles; ++i) {
-    double x_pred = particle[i].x + velocity/yaw_rate * (sin(particle[i].theta + yaw_rate*delta_t) - sin(particle[i].theta));
-    double y_pred = particle[i].y + velocity/yaw_rate * (cos(particle[i].theta) - cos(particle[i].theta + yaw_rate*delta_t));
-    double theta_pred = particle[i].theta + yaw_rate*delta_t;
+    double x_pred = particles[i].x + velocity/yaw_rate * (sin(particles[i].theta + yaw_rate*delta_t) - sin(particles[i].theta));
+    double y_pred = particles[i].y + velocity/yaw_rate * (cos(particles[i].theta) - cos(particles[i].theta + yaw_rate*delta_t));
+    double theta_pred = particles[i].theta + yaw_rate*delta_t;
     
-    normal_distribution<double> dist_x(x_pred, std[0]);
-  	normal_distribution<double> dist_y(y_pred, std[1]);
-  	normal_distribution<double> dist_theta(theta_pred, std[2]);
+    normal_distribution<double> dist_x(x_pred, std_pos[0]);
+  	normal_distribution<double> dist_y(y_pred, std_pos[1]);
+  	normal_distribution<double> dist_theta(theta_pred, std_pos[2]);
     
     particles[i].x = dist_x(gen);
-    particles[i].y = dist_y(gen)
+    particles[i].y = dist_y(gen);
     particles[i].theta = dist_theta(gen);
   }  
 }
@@ -109,33 +110,39 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
    */
   Particle part;	
+  double min_dist;
+  double min_x;
+  double min_y;
+  double x_map;
+  double y_map;
+  int association;
+  
   for (int i = 0; i < num_particles; ++i) {
     part = particles[i];
-    part.associations = [];
-    part.sense_x = [];
-    part.sense_y = [];
+    part.associations = {};
+    part.sense_x = {};
+    part.sense_y = {};
     
     for (int j = 0; j < observations.size(); ++j) {
       x_map = part.x + (cos(part.theta) * observations[j].x) - (sin(part.theta) * observations[j].y);
       y_map = part.y + (sin(part.theta) * observations[j].x) + (cos(part.theta) * observations[j].y);
-      double min_dist = sensor_range;
-      double min_x;
-      double min_y;
+      min_dist = sensor_range;
 
-      for (int k = 0; k < Map.size(); ++k) {
-        double distance = dist(map_landmarks[k].x_f, x_map, map_landmarks[k].y_f, y_map);
+      for (int k = 0; k < map_landmarks.landmark_list.size(); ++k) {
+        double distance = dist(map_landmarks.landmark_list[k].x_f, x_map, map_landmarks.landmark_list[k].y_f, y_map);
         if (distance < min_dist) {
-          association = map_landmarks[k].id_i;
+          association = map_landmarks.landmark_list[k].id_i;
           min_dist = distance;
-          min_x = map_landmarks[k].x_f;
-          min_y = map_landmarks[k].y_f;
+          min_x = map_landmarks.landmark_list[k].x_f;
+          min_y = map_landmarks.landmark_list[k].y_f;
         }
       }
       
-      part.associations.append(association);
-      part.sense_x.append(x_map);
-      part.sense_y.append(y_map);
-      part.weight *= exp(- ((min_x - x_map) ** 2) / (std_landmark[0] ** 2) / 2.0  - ((min_y - y_map) ** 2) / (std_landmark[1] ** 2) / 2.0) / sqrt(2.0 * M_PI * std_landmark[1] * std_landmark[2]);//calculate proability of association as well
+      part.associations.push_back(association);
+      part.sense_x.push_back(x_map);
+      part.sense_y.push_back(y_map);
+      part.weight *=  multiv_prob(std_landmark[0], std_landmark[1], x_map, y_map, min_x, min_y);
+      //part.weight *= exp(- ((min_x - x_map) ** 2) / (std_landmark[0] ** 2) / 2.0  - ((min_y - y_map) ** 2) / (std_landmark[1] ** 2) / 2.0) / sqrt(2.0 * M_PI * std_landmark[1] * std_landmark[2]);//calculate proability of association as well
     }
   }
 }
@@ -147,15 +154,16 @@ void ParticleFilter::resample() {
    * NOTE: You may find std::discrete_distribution helpful here.
    *   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
    */
-  std::vector<double> particle_weights[num_particles];
+  std::vector<double> particle_weights;
   std::vector<Particle> particles_resamp;
+  std::default_random_engine gen;
   
   for (int j = 0; j < num_particles; ++j) {
-    particle_weights[j] = particles[j].weight
+    particle_weights.push_back(particles[j].weight);
     }
-  std::discrete_distribution<> d(particle_weights);
+  std::discrete_distribution<> d(particle_weights.begin(), particle_weights.end());
   for(int n=0; n<num_particles; ++n) {
-        particles_resamp[n] = particles(d(gen));
+        particles_resamp.push_back(particles[d(gen)]);
     }
   particles = particles_resamp;
 }
