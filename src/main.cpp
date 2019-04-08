@@ -61,7 +61,7 @@ int main() {
         auto j = json::parse(s);
 
         string event = j[0].get<string>();
-        
+  
         if (event == "telemetry") {
           // j[1] is the data JSON object
           if (!pf.initialized()) {
@@ -76,6 +76,7 @@ int main() {
             //   (noiseless control) data.
             double previous_velocity = std::stod(j[1]["previous_velocity"].get<string>());
             double previous_yawrate = std::stod(j[1]["previous_yawrate"].get<string>());
+            std::cout << "Prev Velocity: " << previous_velocity << "   Prev Yaw Rate: " << previous_yawrate << std::endl;
 
             pf.prediction(delta_t, sigma_pos, previous_velocity, previous_yawrate);
           }
@@ -126,11 +127,19 @@ int main() {
             }
 
             weight_sum += particles[i].weight;
+
           }
 
+          //std::cout << "Highest ID " << best_particle.id << std::endl;
           std::cout << "highest w " << highest_weight << std::endl;
           std::cout << "average w " << weight_sum/num_particles << std::endl;
-
+          std::cout << "x observations: " << sense_observations_x << std::endl;
+          std::cout << "y observations: " << sense_observations_y << std::endl;
+          std::cout << "Best particle: " << best_particle.id << "  x: " << best_particle.x << "  y: " << best_particle.y << std::endl;
+          std::cout << std::endl;
+          
+		 
+              
           json msgJson;
           msgJson["best_particle_x"] = best_particle.x;
           msgJson["best_particle_y"] = best_particle.y;

@@ -30,7 +30,7 @@ class ParticleFilter {
  public:
   // Constructor
   // @param num_particles Number of particles
-  ParticleFilter() : num_particles(0), is_initialized(false) {}
+  ParticleFilter() : num_particles(0), is_initialized(false), debugger(0) {}
 
   // Destructor
   ~ParticleFilter() {}
@@ -118,6 +118,7 @@ class ParticleFilter {
   
   // Flag, if filter is initialized
   bool is_initialized;
+  int debugger;
   
   // Vector of weights of all particles
   std::vector<double> weights; 
